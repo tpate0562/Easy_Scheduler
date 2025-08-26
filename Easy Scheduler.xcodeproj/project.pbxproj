@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		75CBCB882E5CE67800A6E029 /* Event+CoreDataProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CBCB862E5CE43E00A6E029 /* Event+CoreDataProperties.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		75B206712E5BDD610078882D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,11 +31,25 @@
 		75B2065E2E5BDD5F0078882D /* Easy Scheduler.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Easy Scheduler.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		75B206702E5BDD610078882D /* Easy SchedulerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Easy SchedulerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		75B2067A2E5BDD610078882D /* Easy SchedulerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Easy SchedulerUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		75CBCB862E5CE43E00A6E029 /* Event+CoreDataProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Event+CoreDataProperties.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		75CBCB892E5CE69B00A6E029 /* Exceptions for "Easy Scheduler" folder in "Easy Scheduler" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Event+CoreDataProperties.swift",
+			);
+			target = 75B2065D2E5BDD5F0078882D /* Easy Scheduler */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		75B206602E5BDD5F0078882D /* Easy Scheduler */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				75CBCB892E5CE69B00A6E029 /* Exceptions for "Easy Scheduler" folder in "Easy Scheduler" target */,
+			);
 			path = "Easy Scheduler";
 			sourceTree = "<group>";
 		};
@@ -75,6 +93,7 @@
 		75B206552E5BDD5F0078882D = {
 			isa = PBXGroup;
 			children = (
+				75CBCB862E5CE43E00A6E029 /* Event+CoreDataProperties.swift */,
 				75B206602E5BDD5F0078882D /* Easy Scheduler */,
 				75B206732E5BDD610078882D /* Easy SchedulerTests */,
 				75B2067D2E5BDD610078882D /* Easy SchedulerUITests */,
@@ -236,6 +255,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				75CBCB882E5CE67800A6E029 /* Event+CoreDataProperties.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

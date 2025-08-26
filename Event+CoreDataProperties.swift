@@ -1,21 +1,10 @@
-//
-//  Event+CoreDataProperties.swift
-//  Easy Scheduler
-//
-//  Created by Tejas Patel on 8/25/25.
-//
-//
-
-public import Foundation
-public import CoreData
-
-
-public typealias EventCoreDataPropertiesSet = NSSet
+import Foundation
+import CoreData
 
 extension Event {
 
     @nonobjc public class func fetchRequest() -> NSFetchRequest<Event> {
-        return NSFetchRequest<Event>(entityName: "Event")
+        NSFetchRequest<Event>(entityName: "Event")
     }
 
     @NSManaged public var title: String?
@@ -24,10 +13,8 @@ extension Event {
     @NSManaged public var endTime: Date?
     @NSManaged public var useEndTime: Bool
     @NSManaged public var notes: String?
-    @NSManaged public var reminderIntervals: Int64
-
+    @NSManaged public var reminderIntervals: [Int]
+    @NSManaged public var isArchived: Bool
 }
 
-extension Event : Identifiable {
-
-}
+extension Event: Identifiable { }
