@@ -110,7 +110,7 @@ struct EventInputForm: View {
             Form {
                 Section(header: Text("Event Details")) {
                     TextField("Title", text: $title)
-                    DatePicker("Date", selection: $eventDate, displayedComponents: .date)
+                    DatePicker("Date", selection: $eventDate, in: Date()..., displayedComponents: .date)
                     DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
                     Toggle("Set End Time", isOn: $useEndTime)
                     if useEndTime {
@@ -145,7 +145,7 @@ struct EventInputForm: View {
                         .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .alert("Event must have a non-empty title.", isPresented: $showAlert) {
+            .alert("Event start time must be in the future.", isPresented: $showAlert) {
                 Button("OK", role: .cancel) { }
             }
             .alert("End time must be after start time.", isPresented: $invalidEndTimeAlert) {
@@ -159,6 +159,22 @@ struct EventInputForm: View {
             showAlert = true
             return
         }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let eventComponents = calendar.dateComponents([.year, .month, .day], from: eventDate)
+        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+        var combinedComponents = DateComponents()
+        combinedComponents.year = eventComponents.year
+        combinedComponents.month = eventComponents.month
+        combinedComponents.day = eventComponents.day
+        combinedComponents.hour = startComponents.hour
+        combinedComponents.minute = startComponents.minute
+        guard let fullEventDate = calendar.date(from: combinedComponents), fullEventDate > now else {
+            showAlert = true
+            return
+        }
+        
         if useEndTime && !(endTime > startTime) {
             invalidEndTimeAlert = true
             return
