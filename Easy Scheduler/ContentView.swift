@@ -329,9 +329,21 @@ extension View {
                 if event.useEndTime, let end = event.endTime, end < now {
                     event.isArchived = true
                     updated = true
-                } else if !event.useEndTime, let start = event.startTime, start < now {
-                    event.isArchived = true
-                    updated = true
+                } else if !event.useEndTime, let eventDate = event.eventDate, let startTime = event.startTime {
+                    let calendar = Calendar.current
+                    let eventDayComponents = calendar.dateComponents([.year, .month, .day], from: eventDate)
+                    let startTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
+                    var fullStartComponents = DateComponents()
+                    fullStartComponents.year = eventDayComponents.year
+                    fullStartComponents.month = eventDayComponents.month
+                    fullStartComponents.day = eventDayComponents.day
+                    fullStartComponents.hour = startTimeComponents.hour
+                    fullStartComponents.minute = startTimeComponents.minute
+                    fullStartComponents.second = startTimeComponents.second
+                    if let fullStartDate = calendar.date(from: fullStartComponents), fullStartDate < now {
+                        event.isArchived = true
+                        updated = true
+                    }
                 }
             }
             if updated {

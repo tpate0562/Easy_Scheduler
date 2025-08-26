@@ -21,7 +21,7 @@ struct EventsListView: View {
                     Text("No events yet.")
                         .font(.headline)
                         .foregroundStyle(.secondary)
-                        .padding(.top, 40)
+                        .padding(.top, 20)
                 } else {
                     ForEach(events) { event in
                         HStack(alignment: .top, spacing: 16) {
@@ -57,7 +57,6 @@ struct EventsListView: View {
                             }
                             Spacer()
                         }
-                        .padding(.vertical, 12)
                         .background(Color(.systemBackground))
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
@@ -77,7 +76,9 @@ struct EventsListView: View {
                 }
             }
             .listStyle(.plain)
+            .padding(.top, -80)
             .navigationTitle("Your Events")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showEditNotifications) {
                 if let editingEvent = editingEvent {
                     NotificationIntervalEditor(event: editingEvent, selectedIntervals: $selectedIntervals, onSave: { newIntervals in
@@ -155,15 +156,15 @@ struct NotificationIntervalEditor: View {
     var onSave: ([Int]) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    // Example choices: 5, 10, 15, 30, 60 (customize as needed)
-    let choices: [Int] = [5, 10, 15, 30, 60]
+    // Updated choices to match event creation sheet
+    let choices: [Int] = [1, 5, 10, 15, 30, 60, 120, 360, 720, 1440, 2880, 10080, 20160]
 
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Remind me before event:")) {
                     ForEach(choices, id: \.self) { min in
-                        Toggle("\(min) minutes", isOn: Binding(
+                        Toggle(intervalLabel(for: min), isOn: Binding(
                             get: { selectedIntervals.contains(min) },
                             set: { isOn in
                                 if isOn {
@@ -190,6 +191,26 @@ struct NotificationIntervalEditor: View {
                     }
                 }
             }
+        }
+    }
+
+    // Helper function to format interval labels consistently
+    private func intervalLabel(for minutes: Int) -> String {
+        if minutes == 0 {
+            return "At time of event"
+        } else if minutes < 60 {
+            return "\(minutes) minute" + (minutes == 1 ? "" : "s")
+        } else if minutes % 1440 == 0 {
+            // Full days
+            let days = minutes / 1440
+            return "\(days) day" + (days == 1 ? "" : "s")
+        } else if minutes % 60 == 0 {
+            // Full hours
+            let hours = minutes / 60
+            return "\(hours) hour" + (hours == 1 ? "" : "s")
+        } else {
+            // Other minutes (e.g. 90 = 1 hour 30 minutes, but we keep it simple)
+            return "\(minutes) minutes"
         }
     }
 }
