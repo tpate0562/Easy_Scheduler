@@ -15,6 +15,9 @@ extension Event {
     @NSManaged public var notes: String?
     @NSManaged public var reminderIntervals: [Int]
     @NSManaged public var isArchived: Bool
+    @NSManaged public var repeatReminder: Bool
+    @NSManaged public var repeatFrequency: Int64
 }
 
 extension Event: Identifiable { }
+

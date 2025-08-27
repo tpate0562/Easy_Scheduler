@@ -13,6 +13,8 @@ extension Event: Identifiable {
     @NSManaged public var useEndTime: Bool
     @NSManaged public var notes: String
     @NSManaged public var reminderIntervals: [Int]
+    @NSManaged public var repeatReminder: Bool
+    @NSManaged public var repeatFrequency: Int64
     
     public var id: NSManagedObjectID {
         return objectID

@@ -92,6 +92,25 @@ struct SettingsView: View {
 
 // Event input form as a modal sheet
 struct EventInputForm: View {
+    enum RepeatFrequency: Int, CaseIterable, Identifiable {
+        case hour = 60
+        case day = 1440
+        case week = 10080
+        case twoWeeks = 20160
+        case month = 43200 // 30 days
+        
+        var id: Int { self.rawValue }
+        var description: String {
+            switch self {
+            case .hour: return "1 Hour"
+            case .day: return "1 Day"
+            case .week: return "1 Week"
+            case .twoWeeks: return "2 Weeks"
+            case .month: return "1 Month"
+            }
+        }
+    }
+    
     @Environment(\.managedObjectContext) private var viewContext
     @Binding var isPresented: Bool
     @State private var title: String = ""
@@ -103,6 +122,10 @@ struct EventInputForm: View {
     @State private var selectedIntervals: [Int] = []
     @State private var showAlert = false
     @State private var invalidEndTimeAlert = false
+    
+    @State private var repeatReminder: Bool = false
+    @State private var repeatFrequency: RepeatFrequency? = nil
+    
     let availableIntervals = [1, 5, 10, 15, 30, 60, 120, 360, 720, 1440, 2880, 10080, 20160]
     
     var body: some View {
@@ -132,6 +155,30 @@ struct EventInputForm: View {
                                 }
                             }
                         ))
+                    }
+                }
+                Section {
+                    Toggle("Repeat Reminder", isOn: $repeatReminder)
+                    if repeatReminder {
+                        ForEach(RepeatFrequency.allCases) { freq in
+                            Button {
+                                if repeatFrequency == freq {
+                                    repeatFrequency = nil
+                                } else {
+                                    repeatFrequency = freq
+                                }
+                            } label: {
+                                HStack {
+                                    Text(freq.description)
+                                    Spacer()
+                                    if repeatFrequency == freq {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.accentColor)
+                                    }
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                     }
                 }
             }
@@ -188,6 +235,11 @@ struct EventInputForm: View {
         newEvent.notes = notes
         newEvent.reminderIntervals = selectedIntervals.sorted()
         newEvent.isArchived = false
+
+        // Save repeatReminder and repeatFrequency
+        newEvent.repeatReminder = repeatReminder
+        newEvent.repeatFrequency = repeatFrequency.map { Int64($0.rawValue) } ?? 0
+
         do {
             try viewContext.save()
             scheduleNotifications(for: newEvent)
@@ -202,6 +254,10 @@ struct EventInputForm: View {
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
+            
+            // Only schedule the first notification for each reminder interval, no repeated notifications here
+            // Future repeats should be handled by the notification delegate
+            
             for interval in event.reminderIntervals {
                 let triggerDate = Calendar.current.date(byAdding: .minute, value: -interval, to: startTime)
                 guard let triggerDate, triggerDate > Date() else { continue }
@@ -209,9 +265,11 @@ struct EventInputForm: View {
                 content.title = title
                 content.body = "\(title) starts in \(intervalDescription(minutes: interval))"
                 content.sound = .default
+                
                 let trigger = UNCalendarNotificationTrigger(
                     dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate),
                     repeats: false)
+                
                 let identifier = "\(event.objectID.uriRepresentation().absoluteString)-min-\(interval)"
                 let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
                 center.add(request)
@@ -327,6 +385,38 @@ extension View {
             let now = Date()
             for event in events {
                 if event.useEndTime, let end = event.endTime, end < now {
+                    // If the event has repeatReminder and repeatFrequency > 0, create new event for next occurrence
+                    if event.repeatReminder && event.repeatFrequency > 0 {
+                        // Clone event and create next occurrence with updated dates/times
+                        let newEvent = Event(context: context)
+                        newEvent.title = event.title
+                        newEvent.notes = event.notes
+                        newEvent.isArchived = false
+                        newEvent.repeatReminder = event.repeatReminder
+                        newEvent.repeatFrequency = event.repeatFrequency
+                        newEvent.reminderIntervals = event.reminderIntervals
+                        newEvent.useEndTime = event.useEndTime
+                        
+                        // Calculate new startTime, endTime, and eventDate by adding repeatFrequency (in minutes)
+                        let freqMinutes = Int(event.repeatFrequency)
+                        if let oldStartTime = event.startTime {
+                            if let newStartTime = Calendar.current.date(byAdding: .minute, value: freqMinutes, to: oldStartTime) {
+                                newEvent.startTime = newStartTime
+                                
+                                // eventDate should be adjusted to the new startTime's day
+                                newEvent.eventDate = Calendar.current.startOfDay(for: newStartTime)
+                            }
+                        }
+                        if event.useEndTime, let oldEndTime = event.endTime {
+                            if let newEndTime = Calendar.current.date(byAdding: .minute, value: freqMinutes, to: oldEndTime) {
+                                newEvent.endTime = newEndTime
+                            }
+                        } else {
+                            newEvent.endTime = nil
+                        }
+                        
+                        updated = true
+                    }
                     event.isArchived = true
                     updated = true
                 } else if !event.useEndTime, let eventDate = event.eventDate, let startTime = event.startTime {
@@ -341,6 +431,37 @@ extension View {
                     fullStartComponents.minute = startTimeComponents.minute
                     fullStartComponents.second = startTimeComponents.second
                     if let fullStartDate = calendar.date(from: fullStartComponents), fullStartDate < now {
+                        // If the event has repeatReminder and repeatFrequency > 0, create new event for next occurrence
+                        if event.repeatReminder && event.repeatFrequency > 0 {
+                            // Clone event and create next occurrence with updated dates/times
+                            let newEvent = Event(context: context)
+                            newEvent.title = event.title
+                            newEvent.notes = event.notes
+                            newEvent.isArchived = false
+                            newEvent.repeatReminder = event.repeatReminder
+                            newEvent.repeatFrequency = event.repeatFrequency
+                            newEvent.reminderIntervals = event.reminderIntervals
+                            newEvent.useEndTime = event.useEndTime
+                            
+                            // Calculate new startTime, endTime, and eventDate by adding repeatFrequency (in minutes)
+                            let freqMinutes = Int(event.repeatFrequency)
+                            if let oldStartTime = event.startTime {
+                                if let newStartTime = Calendar.current.date(byAdding: .minute, value: freqMinutes, to: oldStartTime) {
+                                    newEvent.startTime = newStartTime
+                                    // eventDate should be adjusted to the new startTime's day
+                                    newEvent.eventDate = Calendar.current.startOfDay(for: newStartTime)
+                                }
+                            }
+                            if event.useEndTime, let oldEndTime = event.endTime {
+                                if let newEndTime = Calendar.current.date(byAdding: .minute, value: freqMinutes, to: oldEndTime) {
+                                    newEvent.endTime = newEndTime
+                                }
+                            } else {
+                                newEvent.endTime = nil
+                            }
+                            
+                            updated = true
+                        }
                         event.isArchived = true
                         updated = true
                     }
@@ -361,4 +482,9 @@ extension View {
 }
 
 // Reminder: Add `isArchived` Bool attribute to your Core Data Event entity with a default value of false and regenerate your Core Data classes to match.
+
+// Reminder: Add `repeatReminder` Bool and `repeatFrequency` String attributes to your Core Data Event entity and regenerate your Core Data classes to match.
+
+// Note: Future repeated notifications will be handled by the notification delegate; this code only schedules the initial notification(s).
+
 
