@@ -78,7 +78,7 @@ struct EventsListView: View {
                 }
             }
             .listStyle(.plain)
-            .padding(.top, -80)
+            .padding(.top, 0)
             .navigationTitle("Your Events")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showEditNotifications) {

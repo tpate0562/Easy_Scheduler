@@ -69,6 +69,7 @@ struct ContentView: View {
     }
     @State private var selectedSidebar: SidebarItem? = .events
     @State private var showingAddEvent = false
+    @State private var showTimeline = false // New state var to toggle timeline view
 
     @Environment(\.managedObjectContext) private var viewContext
 
@@ -92,7 +93,15 @@ struct ContentView: View {
             Group {
                 switch selectedSidebar {
                 case .events:
-                    EventsSection(showingAddEvent: $showingAddEvent)
+                    VStack(spacing: 0) {
+                        if showTimeline {
+                            TimelineView()
+                                .frame(maxHeight: 300)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                                .padding(.bottom, 8)
+                        }
+                        EventsSection(showingAddEvent: $showingAddEvent, showTimeline: $showTimeline)
+                    }
                 case .settings:
                     SettingsView()
                 case .archived:
@@ -112,20 +121,180 @@ struct ContentView: View {
     }
 }
 
-// Section: Events + Add button in toolbar
+// Section: Events + Add button in toolbar + New Timeline toggle button
 struct EventsSection: View {
     @Binding var showingAddEvent: Bool
+    @Binding var showTimeline: Bool // Binding to toggle timeline
+
     var body: some View {
         EventsListView()
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         showingAddEvent = true
                     } label: {
                         Label("Add Event", systemImage: "plus")
                     }
+                    Button {
+                        withAnimation {
+                            showTimeline.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "calendar.day.timeline.leading")
+                    }
+                    .help(showTimeline ? "Hide Timeline" : "Show Timeline")
                 }
             }
+    }
+}
+
+// MARK: - New TimelineView for day's events
+
+struct TimelineView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+    
+    // Colors palette for events
+    private let eventColors: [Color] = [
+        .blue, .green, .orange, .purple, .pink, .red, .yellow, .teal, .indigo
+    ]
+    
+    // Helper to get color for event by index
+    private func color(for index: Int) -> Color {
+        eventColors[index % eventColors.count]
+    }
+    
+    // Fetch today's events sorted by startTime
+    @FetchRequest private var todayEvents: FetchedResults<Event>
+    
+    init() {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let endOfDay = calendar.date(byAdding: DateComponents(day: 1, second: -1), to: startOfDay)!
+        
+        let predicate = NSPredicate(format: "eventDate >= %@ AND eventDate <= %@ AND isArchived == false", startOfDay as NSDate, endOfDay as NSDate)
+        let sortDescriptor = NSSortDescriptor(keyPath: \Event.startTime, ascending: true)
+        _todayEvents = FetchRequest<Event>(entity: Event.entity(), sortDescriptors: [sortDescriptor], predicate: predicate)
+    }
+    
+    // Converts a Date to a vertical offset in points (in 24h view)
+    private func yOffset(for time: Date) -> CGFloat {
+        // Map time of day to y position within 24h, 600 points height
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.hour, .minute], from: time)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        let totalMinutes = hour * 60 + minute
+        let maxHeight: CGFloat = 600
+        return CGFloat(totalMinutes) / 1440 * maxHeight
+    }
+    
+    private let timelineHeight: CGFloat = 600
+    private let barWidth: CGFloat = 280
+    private let noEndTimeBarHeight: CGFloat = 30
+    
+    var body: some View {
+        ScrollView {
+            ZStack(alignment: .topLeading) {
+                // Background timeline with hour marks
+                VStack(spacing: 0) {
+                    ForEach(0..<24) { hour in
+                        HStack(spacing: 0) {
+                            Text("\(hour):00")
+                                .font(.caption2)
+                                .frame(width: 40, alignment: .trailing)
+                                .foregroundColor(.secondary)
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 1)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .frame(height: timelineHeight / 24)
+                    }
+                }
+                .frame(height: timelineHeight)
+                
+                // Events
+                ForEach(Array(todayEvents.enumerated()), id: \.1.objectID) { index, event in
+                    if let start = event.startTime {
+                        let startY = yOffset(for: start)
+                        
+                        if event.useEndTime, let end = event.endTime, end > start {
+                            let endY = yOffset(for: end)
+                            let height = max(endY - startY, 30)
+                            
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(color(for: index).opacity(0.6))
+                                .frame(width: barWidth, height: height)
+                                .position(x: 40 + barWidth / 2 + 8, y: startY + height / 2)
+                                .overlay(
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(event.title ?? "Untitled")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
+                                        HStack(spacing: 4) {
+                                            Text(start, formatter: timeFormatter)
+                                            Text("-")
+                                            Text(end, formatter: timeFormatter)
+                                        }
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.85))
+                                        if let notes = event.notes, !notes.isEmpty {
+                                            Text(notes)
+                                                .font(.caption2)
+                                                .foregroundColor(.white.opacity(0.85))
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    .padding(6)
+                                    , alignment: .topLeading
+                                )
+                                .shadow(radius: 2)
+                        } else {
+                            // No end time: gray bar 30 points tall
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.gray.opacity(0.5))
+                                .frame(width: barWidth, height: noEndTimeBarHeight)
+                                .position(x: 40 + barWidth / 2 + 8, y: startY + noEndTimeBarHeight / 2)
+                                .overlay(
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(event.title ?? "Untitled")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
+                                        Text(start, formatter: timeFormatter)
+                                            .font(.caption2)
+                                            .foregroundColor(.white.opacity(0.85))
+                                        if let notes = event.notes, !notes.isEmpty {
+                                            Text(notes)
+                                                .font(.caption2)
+                                                .foregroundColor(.white.opacity(0.85))
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    .padding(6)
+                                    , alignment: .topLeading
+                                )
+                                .shadow(radius: 2)
+                        }
+                    }
+                }
+            }
+            .frame(height: timelineHeight + 20)
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(UIColor.secondarySystemBackground))
+                    .shadow(radius: 4)
+            )
+            .padding([.leading, .trailing])
+        }
+    }
+    
+    private var timeFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
     }
 }
 
@@ -503,4 +672,5 @@ extension View {
 // Reminder: Add `repeatReminder` Bool and `repeatFrequency` String attributes to your Core Data Event entity and regenerate your Core Data classes to match.
 
 // Note: Future repeated notifications will be handled by the notification delegate; this code only schedules the initial notification(s).
+
 
