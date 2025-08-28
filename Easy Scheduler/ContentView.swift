@@ -70,6 +70,7 @@ struct ContentView: View {
     @State private var selectedSidebar: SidebarItem? = .events
     @State private var showingAddEvent = false
     @State private var showTimeline = false // New state var to toggle timeline view
+    @State private var timelineDate: Date = Calendar.current.startOfDay(for: Date())
 
     @Environment(\.managedObjectContext) private var viewContext
 
@@ -95,8 +96,7 @@ struct ContentView: View {
                 case .events:
                     VStack(spacing: 0) {
                         if showTimeline {
-                            TimelineView()
-                                .frame(maxHeight: 300)
+                            TimelineView(date: $timelineDate)
                                 .transition(.move(edge: .top).combined(with: .opacity))
                                 .padding(.bottom, 8)
                         }
@@ -152,6 +152,7 @@ struct EventsSection: View {
 
 struct TimelineView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Binding var date: Date
     
     // Colors palette for events
     private let eventColors: [Color] = [
@@ -163,12 +164,14 @@ struct TimelineView: View {
         eventColors[index % eventColors.count]
     }
     
-    // Fetch today's events sorted by startTime
+    // Fetch today's events sorted by startTime for the bound date
     @FetchRequest private var todayEvents: FetchedResults<Event>
     
-    init() {
+    init(date: Binding<Date>) {
+        _date = date
+        
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: Date())
+        let startOfDay = calendar.startOfDay(for: date.wrappedValue)
         let endOfDay = calendar.date(byAdding: DateComponents(day: 1, second: -1), to: startOfDay)!
         
         let predicate = NSPredicate(format: "eventDate >= %@ AND eventDate <= %@ AND isArchived == false", startOfDay as NSDate, endOfDay as NSDate)
@@ -189,105 +192,196 @@ struct TimelineView: View {
     }
     
     private let timelineHeight: CGFloat = 600
-    private let barWidth: CGFloat = 280
-    private let noEndTimeBarHeight: CGFloat = 30
+    private let containerPadding: CGFloat = 16
+    private let maxWidth: CGFloat = 280
+    private let minBarHeight: CGFloat = 30
     
-    var body: some View {
-        ScrollView {
-            ZStack(alignment: .topLeading) {
-                // Background timeline with hour marks
-                VStack(spacing: 0) {
-                    ForEach(0..<24) { hour in
-                        HStack(spacing: 0) {
-                            Text("\(hour):00")
-                                .font(.caption2)
-                                .frame(width: 40, alignment: .trailing)
-                                .foregroundColor(.secondary)
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 1)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .frame(height: timelineHeight / 24)
-                    }
-                }
-                .frame(height: timelineHeight)
-                
-                // Events
-                ForEach(Array(todayEvents.enumerated()), id: \.1.objectID) { index, event in
-                    if let start = event.startTime {
-                        let startY = yOffset(for: start)
-                        
-                        if event.useEndTime, let end = event.endTime, end > start {
-                            let endY = yOffset(for: end)
-                            let height = max(endY - startY, 30)
-                            
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(color(for: index).opacity(0.6))
-                                .frame(width: barWidth, height: height)
-                                .position(x: 40 + barWidth / 2 + 8, y: startY + height / 2)
-                                .overlay(
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(event.title ?? "Untitled")
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                            .lineLimit(1)
-                                        HStack(spacing: 4) {
-                                            Text(start, formatter: timeFormatter)
-                                            Text("-")
-                                            Text(end, formatter: timeFormatter)
-                                        }
-                                        .font(.caption2)
-                                        .foregroundColor(.white.opacity(0.85))
-                                        if let notes = event.notes, !notes.isEmpty {
-                                            Text(notes)
-                                                .font(.caption2)
-                                                .foregroundColor(.white.opacity(0.85))
-                                                .lineLimit(2)
-                                        }
-                                    }
-                                    .padding(6)
-                                    , alignment: .topLeading
-                                )
-                                .shadow(radius: 2)
-                        } else {
-                            // No end time: gray bar 30 points tall
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.gray.opacity(0.5))
-                                .frame(width: barWidth, height: noEndTimeBarHeight)
-                                .position(x: 40 + barWidth / 2 + 8, y: startY + noEndTimeBarHeight / 2)
-                                .overlay(
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(event.title ?? "Untitled")
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                            .lineLimit(1)
-                                        Text(start, formatter: timeFormatter)
-                                            .font(.caption2)
-                                            .foregroundColor(.white.opacity(0.85))
-                                        if let notes = event.notes, !notes.isEmpty {
-                                            Text(notes)
-                                                .font(.caption2)
-                                                .foregroundColor(.white.opacity(0.85))
-                                                .lineLimit(2)
-                                        }
-                                    }
-                                    .padding(6)
-                                    , alignment: .topLeading
-                                )
-                                .shadow(radius: 2)
-                        }
-                    }
+    // Helper to determine if a color is dark (for text contrast)
+    private func isColorDark(_ color: Color) -> Bool {
+        // Approximate brightness calculation
+        let uiColor = UIColor(color)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        // Perceived brightness formula
+        let brightness = (red * 299 + green * 587 + blue * 114) / 1000
+        return brightness < 0.5
+    }
+    
+    // MARK: Overlap detection and grouping for events
+    
+    private struct PositionedEvent: Identifiable {
+        let id: NSManagedObjectID
+        let event: Event
+        let index: Int
+        let startY: CGFloat
+        let height: CGFloat
+        let endY: CGFloat
+    }
+    
+    // Groups of overlapping events (each group is [PositionedEvent])
+    private func groupOverlappingEvents(_ positionedEvents: [PositionedEvent]) -> [[PositionedEvent]] {
+        var groups: [[PositionedEvent]] = []
+        var currentGroup: [PositionedEvent] = []
+        
+        // Events are sorted by startY ascending
+        for event in positionedEvents {
+            if currentGroup.isEmpty {
+                currentGroup.append(event)
+            } else {
+                // Check if event overlaps with any in currentGroup
+                let overlaps = currentGroup.contains { $0.endY > event.startY }
+                if overlaps {
+                    currentGroup.append(event)
+                } else {
+                    groups.append(currentGroup)
+                    currentGroup = [event]
                 }
             }
-            .frame(height: timelineHeight + 20)
-            .padding()
+        }
+        if !currentGroup.isEmpty {
+            groups.append(currentGroup)
+        }
+        return groups
+    }
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(dateHeader)
+                .font(.headline.bold())
+                .padding(.top, 4)
+            
+            ScrollView(.vertical, showsIndicators: true) {
+                ZStack(alignment: .topLeading) {
+                    // Background timeline with hour marks
+                    VStack(spacing: 0) {
+                        ForEach(0..<24) { hour in
+                            HStack(spacing: 0) {
+                                Text("\(hour):00")
+                                    .font(.caption2)
+                                    .frame(width: 40, alignment: .trailing)
+                                    .foregroundColor(.secondary)
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(height: 1)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .frame(height: timelineHeight / 24)
+                        }
+                    }
+                    .frame(height: timelineHeight)
+                    
+                    // Prepare positions and sizes for events
+                    let positionedEvents: [PositionedEvent] = todayEvents.enumerated().compactMap { index, event in
+                        guard let start = event.startTime else {
+                            return nil
+                        }
+                        let startY = yOffset(for: start)
+                        var endY: CGFloat
+                        if event.useEndTime, let end = event.endTime, end > start {
+                            endY = yOffset(for: end)
+                        } else {
+                            endY = startY + minBarHeight
+                        }
+                        let height = max(endY - startY, minBarHeight)
+                        
+                        return PositionedEvent(id: event.objectID, event: event, index: index, startY: startY, height: height, endY: endY)
+                    }.sorted { $0.startY < $1.startY }
+                    
+                    // Group events by overlapping vertical ranges
+                    let groups = groupOverlappingEvents(positionedEvents)
+                    
+                    ForEach(groups.indices, id: \.self) { groupIndex in
+                        let group = groups[groupIndex]
+                        // Calculate the min startY and max endY in this group (to position the HStack)
+                        let groupStartY = group.map(\.startY).min() ?? 0
+                        let groupEndY = group.map(\.endY).max() ?? 0
+                        // We place the HStack at groupStartY,
+                        // individual bars will be positioned inside it with offset to match their exact startY
+                        let groupHeight = groupEndY - groupStartY
+                        
+                        HStack(alignment: .top, spacing: 8) {
+                            ForEach(group) { positionedEvent in
+                                let fillColor = color(for: positionedEvent.index).opacity(0.6)
+                                let isDarkText = isColorDark(fillColor)
+                                let fgColor: Color = isDarkText ? .white : .black
+                                // Use font size scaled by bar height (clamped)
+                                let fontSize: CGFloat = max(min(positionedEvent.height / 3, 14), 10)
+                                
+                                // Offset inside HStack to align precisely to startY
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(positionedEvent.event.title ?? "Untitled")
+                                        .font(.system(size: fontSize, weight: .semibold))
+                                        .foregroundColor(fgColor)
+                                        .lineLimit(1)
+                                    if let start = positionedEvent.event.startTime {
+                                        if positionedEvent.event.useEndTime, let end = positionedEvent.event.endTime {
+                                            HStack(spacing: 4) {
+                                                Text(start, formatter: timeFormatter)
+                                                Text("-")
+                                                Text(end, formatter: timeFormatter)
+                                            }
+                                            .font(.system(size: fontSize * 0.8))
+                                            .foregroundColor(fgColor.opacity(0.85))
+                                        } else {
+                                            Text(start, formatter: timeFormatter)
+                                                .font(.system(size: fontSize * 0.8))
+                                                .foregroundColor(fgColor.opacity(0.85))
+                                        }
+                                    }
+                                    if let notes = positionedEvent.event.notes, !notes.isEmpty {
+                                        Text(notes)
+                                            .font(.system(size: fontSize * 0.8))
+                                            .foregroundColor(fgColor.opacity(0.85))
+                                            .lineLimit(2)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(6)
+                                .frame(width: (maxWidth - CGFloat(group.count - 1) * 8) / CGFloat(group.count), height: positionedEvent.height, alignment: .topLeading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(fillColor)
+                                        .shadow(radius: 2)
+                                )
+                                // Align vertically so top aligns with actual startY inside group container
+                                .padding(.top, positionedEvent.startY - groupStartY)
+                            }
+                        }
+                        // Position the whole group container at groupStartY
+                        .frame(width: maxWidth)
+                        .position(x: 40 + maxWidth / 2 + containerPadding, y: groupStartY + groupHeight / 2)
+                    }
+                }
+                .frame(minHeight: timelineHeight + 20)
+                .padding(.horizontal, containerPadding)
+            }
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(UIColor.secondarySystemBackground))
                     .shadow(radius: 4)
             )
             .padding([.leading, .trailing])
+            .gesture(
+                DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                    .onEnded { value in
+                        if abs(value.translation.width) > abs(value.translation.height) {
+                            if value.translation.width < -40 {
+                                // Swipe left -> next day
+                                withAnimation {
+                                    date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
+                                }
+                            } else if value.translation.width > 40 {
+                                // Swipe right -> previous day
+                                withAnimation {
+                                    date = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date
+                                }
+                            }
+                        }
+                    }
+            )
         }
     }
     
@@ -295,6 +389,12 @@ struct TimelineView: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter
+    }
+    
+    private var dateHeader: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d, yyyy"
+        return formatter.string(from: date)
     }
 }
 
@@ -672,5 +772,7 @@ extension View {
 // Reminder: Add `repeatReminder` Bool and `repeatFrequency` String attributes to your Core Data Event entity and regenerate your Core Data classes to match.
 
 // Note: Future repeated notifications will be handled by the notification delegate; this code only schedules the initial notification(s).
+
+
 
 
