@@ -65,7 +65,9 @@ struct EventsListView: View {
                                 Label("Delete", systemImage: "trash")
                             }
                             Button {
-                                selectedIntervals = reminderIntervalsArray(from: event.reminderIntervals)
+                                print("DEBUG: Edit Notifications swipe tapped for event: \(event.title ?? "(No Title)")") // Debugging print
+                                print("DEBUG: Current reminderIntervals: \(event.reminderIntervals)") // Debugging print
+                                selectedIntervals = event.reminderIntervals
                                 editingEvent = event
                                 showEditNotifications = true
                             } label: {
@@ -85,6 +87,8 @@ struct EventsListView: View {
                         updateNotificationIntervals(for: editingEvent, intervals: newIntervals)
                         showEditNotifications = false
                     })
+                } else {
+                    EmptyView()
                 }
             }
         }
@@ -101,7 +105,7 @@ struct EventsListView: View {
 
     private func updateNotificationIntervals(for event: Event, intervals: [Int]) {
         // Ensure 'reminderIntervals' is set as Transformable in the Core Data model to store an array.
-        event.reminderIntervals = NSArray(array: intervals) as! [Int]
+        event.reminderIntervals = intervals
         do {
             try viewContext.save()
             rescheduleNotifications(for: event)
@@ -122,7 +126,7 @@ struct EventsListView: View {
             let idsToRemove = requests.filter { $0.identifier.hasPrefix(identifierRoot) }.map { $0.identifier }
             center.removePendingNotificationRequests(withIdentifiers: idsToRemove)
             
-            let intervals = reminderIntervalsArray(from: event.reminderIntervals)
+            let intervals = event.reminderIntervals
             
             for interval in intervals {
                 guard interval > 0 else { continue }
@@ -159,8 +163,16 @@ struct NotificationIntervalEditor: View {
     // Updated choices to match event creation sheet
     let choices: [Int] = [1, 5, 10, 15, 30, 60, 120, 360, 720, 1440, 2880, 10080, 20160]
 
+    init(event: Event, selectedIntervals: Binding<[Int]>, onSave: @escaping ([Int]) -> Void) {
+        self.event = event
+        self._selectedIntervals = selectedIntervals
+        self.onSave = onSave
+        print("DEBUG: NotificationIntervalEditor initialized with event: \(event.title ?? "(No Title)") and intervals: \(selectedIntervals.wrappedValue)") // Debugging print
+    }
+
     var body: some View {
-        NavigationView {
+        print("DEBUG: NotificationIntervalEditor body evaluated for event: \(event.title ?? "(No Title)") with selectedIntervals: \(selectedIntervals)") // Debugging print
+        return NavigationView {
             Form {
                 Section(header: Text("Remind me before event:")) {
                     ForEach(choices, id: \.self) { min in
@@ -172,6 +184,7 @@ struct NotificationIntervalEditor: View {
                                 } else {
                                     selectedIntervals.removeAll { $0 == min }
                                 }
+                                print("DEBUG: Toggled interval \(min) to \(isOn). Current selectedIntervals: \(selectedIntervals)") // Debugging print
                             }
                         ))
                     }
@@ -181,12 +194,14 @@ struct NotificationIntervalEditor: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        print("DEBUG: Save tapped with intervals: \(selectedIntervals)") // Debugging print
                         onSave(Array(Set(selectedIntervals)).sorted())
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        print("DEBUG: Cancel tapped. Current intervals: \(selectedIntervals)") // Debugging print
                         dismiss()
                     }
                 }
@@ -213,11 +228,6 @@ struct NotificationIntervalEditor: View {
             return "\(minutes) minutes"
         }
     }
-}
-
-// Helper function to bridge transformable value to [Int]
-private func reminderIntervalsArray(from obj: Any?) -> [Int] {
-    (obj as? [NSNumber])?.map { $0.intValue } ?? []
 }
 
 #Preview {

@@ -9,6 +9,57 @@ import SwiftUI
 import CoreData
 import UserNotifications
 
+// MARK: - Global Notification Scheduling Function
+
+/// Schedules notifications for the given event based on its reminder intervals.
+/// This function is reusable across the app and ensures consistent notification management.
+private func scheduleNotifications(for event: Event) {
+    guard let title = event.title as String?, let startTime = event.startTime else { return }
+    let center = UNUserNotificationCenter.current()
+    center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+        guard granted else { return }
+        
+        // Remove any existing notifications for this event to avoid duplicates
+        let identifiers = event.reminderIntervals.map { interval in
+            "\(event.objectID.uriRepresentation().absoluteString)-min-\(interval)"
+        }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        
+        // Schedule notifications for each reminder interval
+        for interval in event.reminderIntervals {
+            let triggerDate = Calendar.current.date(byAdding: .minute, value: -interval, to: startTime)
+            guard let triggerDate, triggerDate > Date() else { continue }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = "\(title) starts in \(intervalDescription(minutes: interval))"
+            content.sound = .default
+            
+            let trigger = UNCalendarNotificationTrigger(
+                dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate),
+                repeats: false)
+            
+            let identifier = "\(event.objectID.uriRepresentation().absoluteString)-min-\(interval)"
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            center.add(request)
+        }
+    }
+}
+
+/// Helper to create a human-readable description of the interval.
+private func intervalDescription(minutes: Int) -> String {
+    if minutes < 60 {
+        return "\(minutes) minute\(minutes == 1 ? "" : "s")"
+    } else {
+        let hours = minutes / 60
+        let mins = minutes % 60
+        if mins == 0 {
+            return "\(hours) hour\(hours == 1 ? "" : "s")"
+        } else {
+            return "\(hours) hour\(hours == 1 ? "" : "s") \(mins) minute\(mins == 1 ? "" : "s")"
+        }
+    }
+}
+
 struct ContentView: View {
     enum SidebarItem: String, CaseIterable, Identifiable {
         case events = "Events"
@@ -200,6 +251,7 @@ struct EventInputForm: View {
             }
         }
     }
+    
     func saveEvent() {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
@@ -242,52 +294,11 @@ struct EventInputForm: View {
 
         do {
             try viewContext.save()
+            // Use global function to schedule notifications
             scheduleNotifications(for: newEvent)
             isPresented = false
         } catch {
             // Handle error (show alert, etc.)
-        }
-    }
-    
-    private func scheduleNotifications(for event: Event) {
-        guard let title = event.title as String?, let startTime = event.startTime else { return }
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            guard granted else { return }
-            
-            // Only schedule the first notification for each reminder interval, no repeated notifications here
-            // Future repeats should be handled by the notification delegate
-            
-            for interval in event.reminderIntervals {
-                let triggerDate = Calendar.current.date(byAdding: .minute, value: -interval, to: startTime)
-                guard let triggerDate, triggerDate > Date() else { continue }
-                let content = UNMutableNotificationContent()
-                content.title = title
-                content.body = "\(title) starts in \(intervalDescription(minutes: interval))"
-                content.sound = .default
-                
-                let trigger = UNCalendarNotificationTrigger(
-                    dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate),
-                    repeats: false)
-                
-                let identifier = "\(event.objectID.uriRepresentation().absoluteString)-min-\(interval)"
-                let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
-                center.add(request)
-            }
-        }
-    }
-    
-    private func intervalDescription(minutes: Int) -> String {
-        if minutes < 60 {
-            return "\(minutes) minute\(minutes == 1 ? "" : "s")"
-        } else {
-            let hours = minutes / 60
-            let mins = minutes % 60
-            if mins == 0 {
-                return "\(hours) hour\(hours == 1 ? "" : "s")"
-            } else {
-                return "\(hours) hour\(hours == 1 ? "" : "s") \(mins) minute\(mins == 1 ? "" : "s")"
-            }
         }
     }
     
@@ -415,6 +426,9 @@ extension View {
                             newEvent.endTime = nil
                         }
                         
+                        // Schedule notifications for the new repeated event
+                        scheduleNotifications(for: newEvent)
+                        
                         updated = true
                     }
                     event.isArchived = true
@@ -460,6 +474,9 @@ extension View {
                                 newEvent.endTime = nil
                             }
                             
+                            // Schedule notifications for the new repeated event
+                            scheduleNotifications(for: newEvent)
+                            
                             updated = true
                         }
                         event.isArchived = true
@@ -486,5 +503,4 @@ extension View {
 // Reminder: Add `repeatReminder` Bool and `repeatFrequency` String attributes to your Core Data Event entity and regenerate your Core Data classes to match.
 
 // Note: Future repeated notifications will be handled by the notification delegate; this code only schedules the initial notification(s).
-
 
