@@ -183,18 +183,23 @@ struct TimelineView: View {
     private func yOffset(for time: Date) -> CGFloat {
         // Map time of day to y position within 24h, 600 points height
         let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute], from: time)
+        let components = calendar.dateComponents([.hour, .minute, .second], from: time)
         let hour = components.hour ?? 0
         let minute = components.minute ?? 0
-        let totalMinutes = hour * 60 + minute
-        let maxHeight: CGFloat = 600
-        return CGFloat(totalMinutes) / 1440 * maxHeight
+        let second = components.second ?? 0
+        let totalSeconds = hour * 3600 + minute * 60 + second
+        let maxHeight: CGFloat = timelineHeight
+        return CGFloat(totalSeconds) / 86400 * maxHeight
     }
     
+    // Layout constants
     private let timelineHeight: CGFloat = 600
     private let containerPadding: CGFloat = 16
     private let maxWidth: CGFloat = 280
     private let minBarHeight: CGFloat = 30
+    
+    // Arrow side inset: decrease to move arrows outward (closer to edges), increase to move inward
+    private let arrowSideInset: CGFloat = 6
     
     // Helper to determine if a color is dark (for text contrast)
     private func isColorDark(_ color: Color) -> Bool {
@@ -247,141 +252,198 @@ struct TimelineView: View {
         return groups
     }
     
+    @State private var showDatePicker = false
+    
     var body: some View {
         VStack(spacing: 4) {
-            Text(dateHeader)
-                .font(.headline.bold())
-                .padding(.top, 4)
-            
-            ScrollView(.vertical, showsIndicators: true) {
-                ZStack(alignment: .topLeading) {
-                    // Background timeline with hour marks
-                    VStack(spacing: 0) {
-                        ForEach(0..<24) { hour in
-                            HStack(spacing: 0) {
-                                Text("\(hour):00")
-                                    .font(.caption2)
-                                    .frame(width: 40, alignment: .trailing)
-                                    .foregroundColor(.secondary)
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 1)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .frame(height: timelineHeight / 24)
-                        }
+            // Header with tappable date (opens a date picker)
+            HStack {
+                Spacer()
+                Button {
+                    showDatePicker = true
+                } label: {
+                    Text(dateHeader)
+                        .font(.headline.bold())
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showDatePicker, arrowEdge: .top) {
+                    VStack {
+                        DatePicker(
+                            "",
+                            selection: $date,
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .padding()
                     }
-                    .frame(height: timelineHeight)
-                    
-                    // Prepare positions and sizes for events
-                    let positionedEvents: [PositionedEvent] = todayEvents.enumerated().compactMap { index, event in
-                        guard let start = event.startTime else {
-                            return nil
+                    .frame(minWidth: 320, minHeight: 360)
+                }
+                Spacer()
+            }
+            .padding(.top, 4)
+            .padding(.horizontal)
+            .onChange(of: date) { _ in
+                // Close picker after selecting a date
+                showDatePicker = false
+            }
+            
+            ZStack {
+                // Scrollable timeline
+                ScrollView(.vertical, showsIndicators: true) {
+                    ZStack(alignment: .topLeading) {
+                        // Background timeline with hour marks
+                        VStack(spacing: 0) {
+                            ForEach(0..<24) { hour in
+                                HStack(spacing: 0) {
+                                    Text("\(hour):00")
+                                        .font(.caption2)
+                                        .frame(width: 40, alignment: .trailing)
+                                        .foregroundColor(.secondary)
+                                    Rectangle()
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(height: 1)
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .frame(height: timelineHeight / 24)
+                            }
                         }
-                        let startY = yOffset(for: start)
-                        var endY: CGFloat
-                        if event.useEndTime, let end = event.endTime, end > start {
-                            endY = yOffset(for: end)
-                        } else {
-                            endY = startY + minBarHeight
-                        }
-                        let height = max(endY - startY, minBarHeight)
+                        .frame(height: timelineHeight)
                         
-                        return PositionedEvent(id: event.objectID, event: event, index: index, startY: startY, height: height, endY: endY)
-                    }.sorted { $0.startY < $1.startY }
-                    
-                    // Group events by overlapping vertical ranges
-                    let groups = groupOverlappingEvents(positionedEvents)
-                    
-                    ForEach(groups.indices, id: \.self) { groupIndex in
-                        let group = groups[groupIndex]
-                        // Calculate the min startY and max endY in this group (to position the HStack)
-                        let groupStartY = group.map(\.startY).min() ?? 0
-                        let groupEndY = group.map(\.endY).max() ?? 0
-                        // We place the HStack at groupStartY,
-                        // individual bars will be positioned inside it with offset to match their exact startY
-                        let groupHeight = groupEndY - groupStartY
+                        // Prepare positions and sizes for events
+                        let positionedEvents: [PositionedEvent] = todayEvents.enumerated().compactMap { index, event in
+                            guard let start = event.startTime else {
+                                return nil
+                            }
+                            let startY = yOffset(for: start)
+                            var endY: CGFloat
+                            if event.useEndTime, let end = event.endTime, end > start {
+                                endY = yOffset(for: end)
+                            } else {
+                                endY = startY + minBarHeight
+                            }
+                            let height = max(endY - startY, minBarHeight)
+                            
+                            return PositionedEvent(id: event.objectID, event: event, index: index, startY: startY, height: height, endY: endY)
+                        }.sorted { $0.startY < $1.startY }
                         
-                        HStack(alignment: .top, spacing: 8) {
-                            ForEach(group) { positionedEvent in
-                                let fillColor = color(for: positionedEvent.index).opacity(0.6)
-                                let isDarkText = isColorDark(fillColor)
-                                let fgColor: Color = isDarkText ? .white : .black
-                                // Use font size scaled by bar height (clamped)
-                                let fontSize: CGFloat = max(min(positionedEvent.height / 3, 14), 10)
-                                
-                                // Offset inside HStack to align precisely to startY
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(positionedEvent.event.title ?? "Untitled")
-                                        .font(.system(size: fontSize, weight: .semibold))
-                                        .foregroundColor(fgColor)
-                                        .lineLimit(1)
-                                    if let start = positionedEvent.event.startTime {
-                                        if positionedEvent.event.useEndTime, let end = positionedEvent.event.endTime {
-                                            HStack(spacing: 4) {
-                                                Text(start, formatter: timeFormatter)
-                                                Text("-")
-                                                Text(end, formatter: timeFormatter)
-                                            }
-                                            .font(.system(size: fontSize * 0.8))
-                                            .foregroundColor(fgColor.opacity(0.85))
-                                        } else {
-                                            Text(start, formatter: timeFormatter)
+                        // Group events by overlapping vertical ranges
+                        let groups = groupOverlappingEvents(positionedEvents)
+                        
+                        ForEach(groups.indices, id: \.self) { groupIndex in
+                            let group = groups[groupIndex]
+                            let groupStartY = group.map(\.startY).min() ?? 0
+                            let groupEndY = group.map(\.endY).max() ?? 0
+                            let groupHeight = groupEndY - groupStartY
+                            
+                            // Use a fixed-height ZStack to place items with exact vertical offsets
+                            ZStack(alignment: .topLeading) {
+                                ForEach(group) { positionedEvent in
+                                    let fillColor = color(for: positionedEvent.index).opacity(0.6)
+                                    let isDarkText = isColorDark(fillColor)
+                                    let fgColor: Color = isDarkText ? .white : .black
+                                    let fontSize: CGFloat = max(min(positionedEvent.height / 3, 14), 10)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(positionedEvent.event.title ?? "Untitled")
+                                            .font(.system(size: fontSize, weight: .semibold))
+                                            .foregroundColor(fgColor)
+                                            .lineLimit(1)
+                                        if let start = positionedEvent.event.startTime {
+                                            if positionedEvent.event.useEndTime, let end = positionedEvent.event.endTime {
+                                                HStack(spacing: 4) {
+                                                    Text(start, formatter: timeFormatter)
+                                                    Text("-")
+                                                    Text(end, formatter: timeFormatter)
+                                                }
                                                 .font(.system(size: fontSize * 0.8))
                                                 .foregroundColor(fgColor.opacity(0.85))
+                                            } else {
+                                                Text(start, formatter: timeFormatter)
+                                                    .font(.system(size: fontSize * 0.8))
+                                                    .foregroundColor(fgColor.opacity(0.85))
+                                            }
                                         }
+                                        if let notes = positionedEvent.event.notes, !notes.isEmpty {
+                                            Text(notes)
+                                                .font(.system(size: fontSize * 0.8))
+                                                .foregroundColor(fgColor.opacity(0.85))
+                                                .lineLimit(2)
+                                        }
+                                        Spacer(minLength: 0)
                                     }
-                                    if let notes = positionedEvent.event.notes, !notes.isEmpty {
-                                        Text(notes)
-                                            .font(.system(size: fontSize * 0.8))
-                                            .foregroundColor(fgColor.opacity(0.85))
-                                            .lineLimit(2)
-                                    }
-                                    Spacer(minLength: 0)
+                                    .padding(6)
+                                    .frame(width: (maxWidth - CGFloat(group.count - 1) * 8) / CGFloat(group.count),
+                                           height: positionedEvent.height,
+                                           alignment: .topLeading)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(fillColor)
+                                            .shadow(radius: 2)
+                                    )
+                                    .offset(y: positionedEvent.startY - groupStartY) // precise vertical placement
                                 }
-                                .padding(6)
-                                .frame(width: (maxWidth - CGFloat(group.count - 1) * 8) / CGFloat(group.count), height: positionedEvent.height, alignment: .topLeading)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(fillColor)
-                                        .shadow(radius: 2)
-                                )
-                                // Align vertically so top aligns with actual startY inside group container
-                                .padding(.top, positionedEvent.startY - groupStartY)
                             }
+                            .frame(width: maxWidth, height: groupHeight, alignment: .topLeading)
+                            .position(x: 40 + maxWidth / 2 + containerPadding, y: groupStartY + groupHeight / 2)
                         }
-                        // Position the whole group container at groupStartY
-                        .frame(width: maxWidth)
-                        .position(x: 40 + maxWidth / 2 + containerPadding, y: groupStartY + groupHeight / 2)
                     }
+                    .frame(minHeight: timelineHeight + 20)
+                    .padding(.horizontal, containerPadding)
                 }
-                .frame(minHeight: timelineHeight + 20)
-                .padding(.horizontal, containerPadding)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(UIColor.secondarySystemBackground))
-                    .shadow(radius: 4)
-            )
-            .padding([.leading, .trailing])
-            .gesture(
-                DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                    .onEnded { value in
-                        if abs(value.translation.width) > abs(value.translation.height) {
-                            if value.translation.width < -40 {
-                                // Swipe left -> next day
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(UIColor.secondarySystemBackground))
+                        .shadow(radius: 4)
+                )
+                .padding([.leading, .trailing])
+                // Re-enable only leftward swipes (right-to-left) starting away from the left edge
+                .gesture(
+                    DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                        .onEnded { value in
+                            let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                            let startedAwayFromLeftEdge = value.startLocation.x > 60
+                            if horizontal && value.translation.width < -40 && startedAwayFromLeftEdge {
                                 withAnimation {
                                     date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
                                 }
-                            } else if value.translation.width > 40 {
-                                // Swipe right -> previous day
-                                withAnimation {
-                                    date = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date
-                                }
                             }
                         }
+                )
+                
+                // Overlay navigation arrows centered vertically
+                HStack {
+                    Button {
+                        withAnimation {
+                            date = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date
+                        }
+                    } label: {
+                        Image(systemName: "arrow.left.circle")
+                            .font(.title2)
+                            .padding(8)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
-            )
+                    .buttonStyle(.plain)
+                    .help("Previous Day")
+                    
+                    Spacer()
+                    
+                    Button {
+                        withAnimation {
+                            date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
+                        }
+                    } label: {
+                        Image(systemName: "arrow.right.circle")
+                            .font(.title2)
+                            .padding(8)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Next Day")
+                }
+                .padding(.horizontal, arrowSideInset) // tweak this to move arrows in/out
+                .allowsHitTesting(true)
+            }
         }
     }
     
@@ -716,7 +778,7 @@ extension View {
                     if let fullStartDate = calendar.date(from: fullStartComponents), fullStartDate < now {
                         // If the event has repeatReminder and repeatFrequency > 0, create new event for next occurrence
                         if event.repeatReminder && event.repeatFrequency > 0 {
-                            // Clone event and create next occurrence with updated dates/times
+                            // Clone event and create new occurrence with updated dates/times
                             let newEvent = Event(context: context)
                             newEvent.title = event.title
                             newEvent.notes = event.notes
@@ -772,7 +834,3 @@ extension View {
 // Reminder: Add `repeatReminder` Bool and `repeatFrequency` String attributes to your Core Data Event entity and regenerate your Core Data classes to match.
 
 // Note: Future repeated notifications will be handled by the notification delegate; this code only schedules the initial notification(s).
-
-
-
-
