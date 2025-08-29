@@ -9,12 +9,33 @@ import SwiftUI
 import CoreData
 import UserNotifications
 
+// MARK: - Helpers to merge event date with time components
+
+/// Combines a calendar day (from eventDate) with the time components (hour/minute/second) from timeOfDay.
+/// Returns a Date at that exact day+time in the current calendar/timezone.
+private func mergedDate(eventDate: Date?, timeOfDay: Date?) -> Date? {
+    guard let eventDate, let timeOfDay else { return nil }
+    let cal = Calendar.current
+    let day = cal.dateComponents([.year, .month, .day], from: eventDate)
+    let time = cal.dateComponents([.hour, .minute, .second], from: timeOfDay)
+    var combined = DateComponents()
+    combined.year = day.year
+    combined.month = day.month
+    combined.day = day.day
+    combined.hour = time.hour
+    combined.minute = time.minute
+    combined.second = time.second
+    return cal.date(from: combined)
+}
+
 // MARK: - Global Notification Scheduling Function
 
 /// Schedules notifications for the given event based on its reminder intervals.
-/// This function is reusable across the app and ensures consistent notification management.
+/// Always uses the merged "full" start date (eventDate + startTime's time).
 private func scheduleNotifications(for event: Event) {
-    guard let title = event.title as String?, let startTime = event.startTime else { return }
+    guard let title = event.title as String? else { return }
+    guard let fullStart = mergedDate(eventDate: event.eventDate, timeOfDay: event.startTime) else { return }
+    
     let center = UNUserNotificationCenter.current()
     center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
         guard granted else { return }
@@ -27,8 +48,10 @@ private func scheduleNotifications(for event: Event) {
         
         // Schedule notifications for each reminder interval
         for interval in event.reminderIntervals {
-            let triggerDate = Calendar.current.date(byAdding: .minute, value: -interval, to: startTime)
-            guard let triggerDate, triggerDate > Date() else { continue }
+            guard interval >= 0 else { continue }
+            guard let triggerDate = Calendar.current.date(byAdding: .minute, value: -interval, to: fullStart) else { continue }
+            guard triggerDate > Date() else { continue }
+            
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = "\(title) starts in \(intervalDescription(minutes: interval))"
@@ -36,7 +59,8 @@ private func scheduleNotifications(for event: Event) {
             
             let trigger = UNCalendarNotificationTrigger(
                 dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate),
-                repeats: false)
+                repeats: false
+            )
             
             let identifier = "\(event.objectID.uriRepresentation().absoluteString)-min-\(interval)"
             let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
@@ -152,7 +176,14 @@ struct EventsSection: View {
 
 struct TimelineView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.displayScale) private var displayScale
     @Binding var date: Date
+    
+    // Zoom state
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var accumulatedZoom: CGFloat = 1.0
+    private let minZoom: CGFloat = 0.5
+    private let maxZoom: CGFloat = 3.0
     
     // Colors palette for events
     private let eventColors: [Color] = [
@@ -179,27 +210,34 @@ struct TimelineView: View {
         _todayEvents = FetchRequest<Event>(entity: Event.entity(), sortDescriptors: [sortDescriptor], predicate: predicate)
     }
     
-    // Converts a Date to a vertical offset in points (in 24h view)
+    // Pixel snapping helper to avoid anti-aliased “drift”
+    private func snap(_ y: CGFloat) -> CGFloat {
+        (y * displayScale).rounded() / displayScale
+    }
+    
+    // Layout constants
+    private let baseTimelineHeight: CGFloat = 600
+    private var timelineHeight: CGFloat { baseTimelineHeight * zoomScale }
+    private let containerPadding: CGFloat = 16
+    private let maxWidth: CGFloat = 280
+    private let columnSpacing: CGFloat = 8
+    private let minInstantEventHeight: CGFloat = 30
+    
+    // Arrow side inset: decrease to move arrows outward (closer to edges), increase to move inward
+    private let arrowSideInset: CGFloat = 4
+    
+    // Converts a Date to a vertical offset in points (in 24h view), snapped to pixels
     private func yOffset(for time: Date) -> CGFloat {
-        // Map time of day to y position within 24h, 600 points height
+        // Map time of day to y position within 24h, scaled by zoom
         let calendar = Calendar.current
         let components = calendar.dateComponents([.hour, .minute, .second], from: time)
         let hour = components.hour ?? 0
         let minute = components.minute ?? 0
         let second = components.second ?? 0
         let totalSeconds = hour * 3600 + minute * 60 + second
-        let maxHeight: CGFloat = timelineHeight
-        return CGFloat(totalSeconds) / 86400 * maxHeight
+        let raw = CGFloat(totalSeconds) / 86400 * timelineHeight
+        return snap(raw)
     }
-    
-    // Layout constants
-    private let timelineHeight: CGFloat = 600
-    private let containerPadding: CGFloat = 16
-    private let maxWidth: CGFloat = 280
-    private let minBarHeight: CGFloat = 30
-    
-    // Arrow side inset: decrease to move arrows outward (closer to edges), increase to move inward
-    private let arrowSideInset: CGFloat = 6
     
     // Helper to determine if a color is dark (for text contrast)
     private func isColorDark(_ color: Color) -> Bool {
@@ -222,8 +260,18 @@ struct TimelineView: View {
         let event: Event
         let index: Int
         let startY: CGFloat
-        let height: CGFloat
         let endY: CGFloat
+        let height: CGFloat
+    }
+    
+    private struct ColumnedEvent: Identifiable {
+        let id: NSManagedObjectID
+        let event: Event
+        let index: Int
+        let startY: CGFloat
+        let endY: CGFloat
+        let height: CGFloat
+        let column: Int
     }
     
     // Groups of overlapping events (each group is [PositionedEvent])
@@ -231,25 +279,47 @@ struct TimelineView: View {
         var groups: [[PositionedEvent]] = []
         var currentGroup: [PositionedEvent] = []
         
-        // Events are sorted by startY ascending
-        for event in positionedEvents {
+        for e in positionedEvents.sorted(by: { $0.startY < $1.startY }) {
             if currentGroup.isEmpty {
-                currentGroup.append(event)
+                currentGroup.append(e)
             } else {
-                // Check if event overlaps with any in currentGroup
-                let overlaps = currentGroup.contains { $0.endY > event.startY }
+                // Overlaps if any current event's endY > e.startY
+                let overlaps = currentGroup.contains { $0.endY > e.startY }
                 if overlaps {
-                    currentGroup.append(event)
+                    currentGroup.append(e)
                 } else {
                     groups.append(currentGroup)
-                    currentGroup = [event]
+                    currentGroup = [e]
                 }
             }
         }
-        if !currentGroup.isEmpty {
-            groups.append(currentGroup)
-        }
+        if !currentGroup.isEmpty { groups.append(currentGroup) }
         return groups
+    }
+    
+    // Assign non-overlapping columns to events within a group
+    private func assignColumns(for group: [PositionedEvent]) -> (events: [ColumnedEvent], columnCount: Int) {
+        // Track last endY per column
+        var columnEnds: [CGFloat] = []
+        var result: [ColumnedEvent] = []
+        
+        for e in group.sorted(by: { $0.startY < $1.startY }) {
+            // Find first column whose last endY <= e.startY
+            var placedColumn: Int?
+            for (i, lastEnd) in columnEnds.enumerated() {
+                if lastEnd <= e.startY {
+                    placedColumn = i
+                    columnEnds[i] = e.endY
+                    break
+                }
+            }
+            if placedColumn == nil {
+                columnEnds.append(e.endY)
+                placedColumn = columnEnds.count - 1
+            }
+            result.append(ColumnedEvent(id: e.id, event: e.event, index: e.index, startY: e.startY, endY: e.endY, height: e.height, column: placedColumn!))
+        }
+        return (result, columnEnds.count)
     }
     
     @State private var showDatePicker = false
@@ -312,19 +382,19 @@ struct TimelineView: View {
                         
                         // Prepare positions and sizes for events
                         let positionedEvents: [PositionedEvent] = todayEvents.enumerated().compactMap { index, event in
-                            guard let start = event.startTime else {
-                                return nil
-                            }
+                            guard let start = event.startTime else { return nil }
                             let startY = yOffset(for: start)
-                            var endY: CGFloat
-                            if event.useEndTime, let end = event.endTime, end > start {
-                                endY = yOffset(for: end)
-                            } else {
-                                endY = startY + minBarHeight
-                            }
-                            let height = max(endY - startY, minBarHeight)
                             
-                            return PositionedEvent(id: event.objectID, event: event, index: index, startY: startY, height: height, endY: endY)
+                            if event.useEndTime, let end = event.endTime, end > start {
+                                let endY = yOffset(for: end)
+                                // Honor exact end time: height is end - start (minimum 1 point for visibility)
+                                let height = max(endY - startY, 1)
+                                return PositionedEvent(id: event.objectID, event: event, index: index, startY: startY, endY: endY, height: height)
+                            } else {
+                                // Instant event: draw a minimum visible height
+                                let endY = startY + minInstantEventHeight
+                                return PositionedEvent(id: event.objectID, event: event, index: index, startY: startY, endY: endY, height: minInstantEventHeight)
+                            }
                         }.sorted { $0.startY < $1.startY }
                         
                         // Group events by overlapping vertical ranges
@@ -334,23 +404,27 @@ struct TimelineView: View {
                             let group = groups[groupIndex]
                             let groupStartY = group.map(\.startY).min() ?? 0
                             let groupEndY = group.map(\.endY).max() ?? 0
-                            let groupHeight = groupEndY - groupStartY
+                            let groupHeight = max(groupEndY - groupStartY, 0)
                             
-                            // Use a fixed-height ZStack to place items with exact vertical offsets
+                            // Assign columns in this group
+                            let (columned, columnCount) = assignColumns(for: group)
+                            let totalSpacing = CGFloat(max(columnCount - 1, 0)) * columnSpacing
+                            let columnWidth = (maxWidth - totalSpacing) / CGFloat(max(columnCount, 1))
+                            
                             ZStack(alignment: .topLeading) {
-                                ForEach(group) { positionedEvent in
-                                    let fillColor = color(for: positionedEvent.index).opacity(0.6)
+                                ForEach(columned) { ce in
+                                    let fillColor = color(for: ce.index).opacity(0.6)
                                     let isDarkText = isColorDark(fillColor)
                                     let fgColor: Color = isDarkText ? .white : .black
-                                    let fontSize: CGFloat = max(min(positionedEvent.height / 3, 14), 10)
+                                    let fontSize: CGFloat = max(min(ce.height / 3, 14), 10)
                                     
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(positionedEvent.event.title ?? "Untitled")
+                                        Text(ce.event.title ?? "Untitled")
                                             .font(.system(size: fontSize, weight: .semibold))
                                             .foregroundColor(fgColor)
                                             .lineLimit(1)
-                                        if let start = positionedEvent.event.startTime {
-                                            if positionedEvent.event.useEndTime, let end = positionedEvent.event.endTime {
+                                        if let start = ce.event.startTime {
+                                            if ce.event.useEndTime, let end = ce.event.endTime {
                                                 HStack(spacing: 4) {
                                                     Text(start, formatter: timeFormatter)
                                                     Text("-")
@@ -364,7 +438,7 @@ struct TimelineView: View {
                                                     .foregroundColor(fgColor.opacity(0.85))
                                             }
                                         }
-                                        if let notes = positionedEvent.event.notes, !notes.isEmpty {
+                                        if let notes = ce.event.notes, !notes.isEmpty {
                                             Text(notes)
                                                 .font(.system(size: fontSize * 0.8))
                                                 .foregroundColor(fgColor.opacity(0.85))
@@ -373,19 +447,24 @@ struct TimelineView: View {
                                         Spacer(minLength: 0)
                                     }
                                     .padding(6)
-                                    .frame(width: (maxWidth - CGFloat(group.count - 1) * 8) / CGFloat(group.count),
-                                           height: positionedEvent.height,
-                                           alignment: .topLeading)
+                                    .frame(width: columnWidth, height: ce.height, alignment: .topLeading)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(fillColor)
                                             .shadow(radius: 2)
                                     )
-                                    .offset(y: positionedEvent.startY - groupStartY) // precise vertical placement
+                                    // precise vertical placement
+                                    .offset(
+                                        x: CGFloat(ce.column) * (columnWidth + columnSpacing),
+                                        y: ce.startY - groupStartY
+                                    )
                                 }
                             }
                             .frame(width: maxWidth, height: groupHeight, alignment: .topLeading)
-                            .position(x: 40 + maxWidth / 2 + containerPadding, y: groupStartY + groupHeight / 2)
+                            .position(
+                                x: 40 + maxWidth / 2 + containerPadding,
+                                y: groupStartY + groupHeight / 2
+                            )
                         }
                     }
                     .frame(minHeight: timelineHeight + 20)
@@ -407,6 +486,28 @@ struct TimelineView: View {
                                 withAnimation {
                                     date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
                                 }
+                            }
+                        }
+                )
+                // Vertical pinch-to-zoom (magnification)
+                .simultaneousGesture(
+                    MagnificationGesture()
+                        .onChanged { value in
+                            // value is relative to gesture start; combine with accumulatedZoom
+                            let newScale = (accumulatedZoom * value).clamped(to: minZoom...maxZoom)
+                            zoomScale = newScale
+                        }
+                        .onEnded { _ in
+                            accumulatedZoom = zoomScale
+                        }
+                )
+                // Double-tap to reset zoom
+                .simultaneousGesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            withAnimation(.easeInOut) {
+                                zoomScale = 1.0
+                                accumulatedZoom = 1.0
                             }
                         }
                 )
@@ -457,6 +558,13 @@ struct TimelineView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d, yyyy"
         return formatter.string(from: date)
+    }
+}
+
+// Simple clamp helper
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }
 
@@ -590,25 +698,19 @@ struct EventInputForm: View {
             return
         }
         
-        let calendar = Calendar.current
         let now = Date()
-        let eventComponents = calendar.dateComponents([.year, .month, .day], from: eventDate)
-        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-        var combinedComponents = DateComponents()
-        combinedComponents.year = eventComponents.year
-        combinedComponents.month = eventComponents.month
-        combinedComponents.day = eventComponents.day
-        combinedComponents.hour = startComponents.hour
-        combinedComponents.minute = startComponents.minute
-        guard let fullEventDate = calendar.date(from: combinedComponents), fullEventDate > now else {
+        // Validate using merged full start/end
+        guard let fullStart = mergedDate(eventDate: eventDate, timeOfDay: startTime), fullStart > now else {
             showAlert = true
             return
         }
-        
-        if useEndTime && !(endTime > startTime) {
-            invalidEndTimeAlert = true
-            return
+        if useEndTime {
+            guard let fullEnd = mergedDate(eventDate: eventDate, timeOfDay: endTime), fullEnd > fullStart else {
+                invalidEndTimeAlert = true
+                return
+            }
         }
+        
         let newEvent = Event(context: viewContext)
         newEvent.title = trimmedTitle
         newEvent.eventDate = eventDate
@@ -726,7 +828,11 @@ extension View {
             var updated = false
             let now = Date()
             for event in events {
-                if event.useEndTime, let end = event.endTime, end < now {
+                // Compute full start/end using eventDate day + time-of-day components
+                let fullStart = mergedDate(eventDate: event.eventDate, timeOfDay: event.startTime)
+                let fullEnd = event.useEndTime ? mergedDate(eventDate: event.eventDate, timeOfDay: event.endTime) : nil
+                
+                if let end = fullEnd, end < now {
                     // If the event has repeatReminder and repeatFrequency > 0, create new event for next occurrence
                     if event.repeatReminder && event.repeatFrequency > 0 {
                         // Clone event and create next occurrence with updated dates/times
@@ -744,8 +850,7 @@ extension View {
                         if let oldStartTime = event.startTime {
                             if let newStartTime = Calendar.current.date(byAdding: .minute, value: freqMinutes, to: oldStartTime) {
                                 newEvent.startTime = newStartTime
-                                
-                                // eventDate should be adjusted to the new startTime's day
+                                // Adjust eventDate to the new startTime's day
                                 newEvent.eventDate = Calendar.current.startOfDay(for: newStartTime)
                             }
                         }
@@ -764,18 +869,8 @@ extension View {
                     }
                     event.isArchived = true
                     updated = true
-                } else if !event.useEndTime, let eventDate = event.eventDate, let startTime = event.startTime {
-                    let calendar = Calendar.current
-                    let eventDayComponents = calendar.dateComponents([.year, .month, .day], from: eventDate)
-                    let startTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
-                    var fullStartComponents = DateComponents()
-                    fullStartComponents.year = eventDayComponents.year
-                    fullStartComponents.month = eventDayComponents.month
-                    fullStartComponents.day = eventDayComponents.day
-                    fullStartComponents.hour = startTimeComponents.hour
-                    fullStartComponents.minute = startTimeComponents.minute
-                    fullStartComponents.second = startTimeComponents.second
-                    if let fullStartDate = calendar.date(from: fullStartComponents), fullStartDate < now {
+                } else if !event.useEndTime {
+                    if let start = fullStart, start < now {
                         // If the event has repeatReminder and repeatFrequency > 0, create new event for next occurrence
                         if event.repeatReminder && event.repeatFrequency > 0 {
                             // Clone event and create new occurrence with updated dates/times
@@ -793,7 +888,7 @@ extension View {
                             if let oldStartTime = event.startTime {
                                 if let newStartTime = Calendar.current.date(byAdding: .minute, value: freqMinutes, to: oldStartTime) {
                                     newEvent.startTime = newStartTime
-                                    // eventDate should be adjusted to the new startTime's day
+                                    // Adjust eventDate to the new startTime's day
                                     newEvent.eventDate = Calendar.current.startOfDay(for: newStartTime)
                                 }
                             }
