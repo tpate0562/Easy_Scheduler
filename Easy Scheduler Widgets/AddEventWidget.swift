@@ -11,6 +11,19 @@
 import WidgetKit
 import SwiftUI
 
+private extension View {
+    @ViewBuilder
+    func widgetContainerBackground() -> some View {
+        if #available(iOS 17.0, *) {
+            self.containerBackground(for: .widget) {
+                Color.clear
+            }
+        } else {
+            self
+        }
+    }
+}
+
 struct EasySchedulerEntry: TimelineEntry {
     let date: Date
 }
@@ -32,12 +45,39 @@ struct EasySchedulerProvider: TimelineProvider {
 }
 
 struct EasySchedulerWidgetEntryView: View {
+    @Environment(\.widgetFamily) var family
     var entry: EasySchedulerEntry
     var body: some View {
-        Image(systemName: "calendar.badge.plus")
-            .symbolRenderingMode(.palette)
-            .foregroundStyle(.primary, .blue)
-            .widgetURL(URL(string: "easyscheduler://create"))
+        Group {
+            switch family {
+            case .accessoryCircular:
+                Image(systemName: "calendar.badge.plus")
+                    .symbolRenderingMode(.hierarchical)
+            case .accessoryRectangular:
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.plus")
+                        .symbolRenderingMode(.hierarchical)
+                        .imageScale(.large)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("New Event")
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                        Text("Tap to add")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+            default:
+                VStack(spacing: 6) {
+                    Image(systemName: "calendar.badge.plus")
+                        .imageScale(.large)
+                    Text("New Event")
+                        .font(.caption)
+                }
+            }
+        }
+        .widgetContainerBackground()
+        .widgetURL(URL(string: "easyscheduler://create"))
     }
 }
 
@@ -51,6 +91,7 @@ struct EasySchedulerLockScreenWidget: Widget {
         }
         .configurationDisplayName("Easy Scheduler")
         .description("Quickly create new schedules from the Lock Screen.")
-        .supportedFamilies([.accessoryCircular, .accessoryRectangular])
+        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .systemSmall, .systemMedium])
     }
 }
+

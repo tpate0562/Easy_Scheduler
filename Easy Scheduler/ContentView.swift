@@ -139,6 +139,15 @@ struct ContentView: View {
             EventInputForm(isPresented: $showingAddEvent)
                 .environment(\.managedObjectContext, viewContext)
         }
+        // Deep link support for opening the Add Event sheet directly from widgets/URLs
+        .onOpenURL { url in
+            // Supported: easyscheduler://create
+            guard let scheme = url.scheme?.lowercased(), scheme == "easyscheduler" else { return }
+            let host = url.host?.lowercased()
+            if host == "create" {
+                showingAddEvent = true
+            }
+        }
         .onAppear {
             autoArchivePastEvents(context: viewContext)
         }
@@ -634,9 +643,11 @@ struct EventInputForm: View {
                     TextField("Title", text: $title)
                     DatePicker("Date", selection: $eventDate, in: Date()..., displayedComponents: .date)
                     DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
                     Toggle("Set End Time", isOn: $useEndTime)
                     if useEndTime {
                         DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.wheel)
                     }
                     TextEditor(text: $notes)
                         .frame(height: 70)
@@ -938,3 +949,5 @@ extension View {
 // Reminder: Add `repeatReminder` Bool and `repeatFrequency` String attributes to your Core Data Event entity and regenerate your Core Data classes to match.
 
 // Note: Future repeated notifications will be handled by the notification delegate; this code only schedules the initial notification(s).
+
+

@@ -240,9 +240,11 @@ struct EventEditForm: View {
                     TextField("Title", text: $title)
                     DatePicker("Date", selection: $eventDate, in: Date()..., displayedComponents: .date)
                     DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
                     Toggle("Set End Time", isOn: $useEndTime)
                     if useEndTime {
                         DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.wheel)
                     }
                     TextEditor(text: $notes)
                         .frame(height: 70)

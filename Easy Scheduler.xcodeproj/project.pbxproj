@@ -7,10 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		755EE46A2E70FD1200931728 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 755EE4692E70FD1200931728 /* WidgetKit.framework */; };
+		755EE46C2E70FD1200931728 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 755EE46B2E70FD1200931728 /* SwiftUI.framework */; };
+		755EE47D2E70FD1300931728 /* Easy Scheduler WidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 755EE4672E70FD1100931728 /* Easy Scheduler WidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		75CBCB882E5CE67800A6E029 /* Event+CoreDataProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CBCB862E5CE43E00A6E029 /* Event+CoreDataProperties.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		755EE47B2E70FD1300931728 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 75B206562E5BDD5F0078882D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 755EE4662E70FD1100931728;
+			remoteInfo = "Easy Scheduler WidgetsExtension";
+		};
 		75B206712E5BDD610078882D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 75B206562E5BDD5F0078882D /* Project object */;
@@ -27,7 +37,24 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		755EE4822E70FD1300931728 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				755EE47D2E70FD1300931728 /* Easy Scheduler WidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		755EE4672E70FD1100931728 /* Easy Scheduler WidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Easy Scheduler WidgetsExtension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		755EE4692E70FD1200931728 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		755EE46B2E70FD1200931728 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		75B2065E2E5BDD5F0078882D /* Easy Scheduler.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Easy Scheduler.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		75B206702E5BDD610078882D /* Easy SchedulerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Easy SchedulerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		75B2067A2E5BDD610078882D /* Easy SchedulerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Easy SchedulerUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -35,9 +62,22 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		755EE4812E70FD1300931728 /* Exceptions for "Easy Scheduler Widgets" folder in "Easy Scheduler WidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AppIntent.swift,
+				Easy_Scheduler_Widgets.swift,
+				Easy_Scheduler_WidgetsBundle.swift,
+				Easy_Scheduler_WidgetsControl.swift,
+				Easy_Scheduler_WidgetsLiveActivity.swift,
+				Info.plist,
+			);
+			target = 755EE4662E70FD1100931728 /* Easy Scheduler WidgetsExtension */;
+		};
 		75CBCB892E5CE69B00A6E029 /* Exceptions for "Easy Scheduler" folder in "Easy Scheduler" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				AddEventWidget.swift,
 				"Event+CoreDataProperties.swift",
 			);
 			target = 75B2065D2E5BDD5F0078882D /* Easy Scheduler */;
@@ -45,6 +85,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		755EE46D2E70FD1200931728 /* Easy Scheduler Widgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				755EE4812E70FD1300931728 /* Exceptions for "Easy Scheduler Widgets" folder in "Easy Scheduler WidgetsExtension" target */,
+			);
+			path = "Easy Scheduler Widgets";
+			sourceTree = "<group>";
+		};
 		75B206602E5BDD5F0078882D /* Easy Scheduler */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -66,6 +114,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		755EE4642E70FD1100931728 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				755EE46C2E70FD1200931728 /* SwiftUI.framework in Frameworks */,
+				755EE46A2E70FD1200931728 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		75B2065B2E5BDD5F0078882D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -90,6 +147,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		755EE4682E70FD1200931728 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				755EE4692E70FD1200931728 /* WidgetKit.framework */,
+				755EE46B2E70FD1200931728 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		75B206552E5BDD5F0078882D = {
 			isa = PBXGroup;
 			children = (
@@ -97,6 +163,8 @@
 				75B206602E5BDD5F0078882D /* Easy Scheduler */,
 				75B206732E5BDD610078882D /* Easy SchedulerTests */,
 				75B2067D2E5BDD610078882D /* Easy SchedulerUITests */,
+				755EE46D2E70FD1200931728 /* Easy Scheduler Widgets */,
+				755EE4682E70FD1200931728 /* Frameworks */,
 				75B2065F2E5BDD5F0078882D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -107,6 +175,7 @@
 				75B2065E2E5BDD5F0078882D /* Easy Scheduler.app */,
 				75B206702E5BDD610078882D /* Easy SchedulerTests.xctest */,
 				75B2067A2E5BDD610078882D /* Easy SchedulerUITests.xctest */,
+				755EE4672E70FD1100931728 /* Easy Scheduler WidgetsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -114,6 +183,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		755EE4662E70FD1100931728 /* Easy Scheduler WidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 755EE47E2E70FD1300931728 /* Build configuration list for PBXNativeTarget "Easy Scheduler WidgetsExtension" */;
+			buildPhases = (
+				755EE4632E70FD1100931728 /* Sources */,
+				755EE4642E70FD1100931728 /* Frameworks */,
+				755EE4652E70FD1100931728 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				755EE46D2E70FD1200931728 /* Easy Scheduler Widgets */,
+			);
+			name = "Easy Scheduler WidgetsExtension";
+			packageProductDependencies = (
+			);
+			productName = "Easy Scheduler WidgetsExtension";
+			productReference = 755EE4672E70FD1100931728 /* Easy Scheduler WidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		75B2065D2E5BDD5F0078882D /* Easy Scheduler */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 75B206842E5BDD610078882D /* Build configuration list for PBXNativeTarget "Easy Scheduler" */;
@@ -121,10 +212,12 @@
 				75B2065A2E5BDD5F0078882D /* Sources */,
 				75B2065B2E5BDD5F0078882D /* Frameworks */,
 				75B2065C2E5BDD5F0078882D /* Resources */,
+				755EE4822E70FD1300931728 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				755EE47C2E70FD1300931728 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				75B206602E5BDD5F0078882D /* Easy Scheduler */,
@@ -192,6 +285,9 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					755EE4662E70FD1100931728 = {
+						CreatedOnToolsVersion = 26.0;
+					};
 					75B2065D2E5BDD5F0078882D = {
 						CreatedOnToolsVersion = 26.0;
 					};
@@ -222,11 +318,19 @@
 				75B2065D2E5BDD5F0078882D /* Easy Scheduler */,
 				75B2066F2E5BDD610078882D /* Easy SchedulerTests */,
 				75B206792E5BDD610078882D /* Easy SchedulerUITests */,
+				755EE4662E70FD1100931728 /* Easy Scheduler WidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		755EE4652E70FD1100931728 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		75B2065C2E5BDD5F0078882D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -251,6 +355,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		755EE4632E70FD1100931728 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		75B2065A2E5BDD5F0078882D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -276,6 +387,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		755EE47C2E70FD1300931728 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 755EE4662E70FD1100931728 /* Easy Scheduler WidgetsExtension */;
+			targetProxy = 755EE47B2E70FD1300931728 /* PBXContainerItemProxy */;
+		};
 		75B206722E5BDD610078882D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 75B2065D2E5BDD5F0078882D /* Easy Scheduler */;
@@ -289,6 +405,66 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		755EE47F2E70FD1300931728 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54D226W6J3;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Easy Scheduler Widgets/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Easy Scheduler Widgets";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "tejaspatel.Easy-Scheduler.Easy-Scheduler-Widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		755EE4802E70FD1300931728 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54D226W6J3;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Easy Scheduler Widgets/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Easy Scheduler Widgets";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "tejaspatel.Easy-Scheduler.Easy-Scheduler-Widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		75B206822E5BDD610078882D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -420,6 +596,7 @@
 				DEVELOPMENT_TEAM = 54D226W6J3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Easy-Scheduler-Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -451,6 +628,7 @@
 				DEVELOPMENT_TEAM = 54D226W6J3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Easy-Scheduler-Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -555,6 +733,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		755EE47E2E70FD1300931728 /* Build configuration list for PBXNativeTarget "Easy Scheduler WidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				755EE47F2E70FD1300931728 /* Debug */,
+				755EE4802E70FD1300931728 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		75B206592E5BDD5F0078882D /* Build configuration list for PBXProject "Easy Scheduler" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
