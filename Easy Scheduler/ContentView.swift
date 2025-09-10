@@ -226,6 +226,15 @@ struct TimelineView: View {
     // Arrow side inset: decrease to move arrows outward (closer to edges), increase to move inward
     private let arrowSideInset: CGFloat = 4
     
+    // Bars appear too high by ~N minutes? Adjust here. Positive moves bars down.
+    // Tip: set this to 30 for a 30-minute downward shift.
+    private let verticalOffsetMinutes: CGFloat = 30
+    private var verticalOffsetPoints: CGFloat {
+        // Convert minutes to points based on the current zoomed timeline height
+        // 1440 minutes in a day -> proportion of timelineHeight
+        timelineHeight * (verticalOffsetMinutes / 1440.0)
+    }
+    
     // Converts a Date to a vertical offset in points (in 24h view), snapped to pixels
     private func yOffset(for time: Date) -> CGFloat {
         // Map time of day to y position within 24h, scaled by zoom
@@ -235,7 +244,7 @@ struct TimelineView: View {
         let minute = components.minute ?? 0
         let second = components.second ?? 0
         let totalSeconds = hour * 3600 + minute * 60 + second
-        let raw = CGFloat(totalSeconds) / 86400 * timelineHeight
+        let raw = CGFloat(totalSeconds) / 86400 * timelineHeight + verticalOffsetPoints
         return snap(raw)
     }
     
